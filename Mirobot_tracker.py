@@ -13,11 +13,11 @@ class MirobotTracker(Node):
 
         # 아루코 마커 인식 노드 구독
         self.subscription = self.create_subscription(
-            PoseArray, 'aruco_poses', self.listener_callback, 10)
+            PoseArray, 'aruco_poses', self.listener_callback, 5)
         self.status_sub = self.create_subscription(
-            String, 'arm_status', self.arm_status_callback, 10)
+            String, 'arm_status', self.arm_status_callback, 5)
         self.wheel_status_sub = self.create_subscription(
-            String, 'wheel_status', self.wheel_status_callback, 10)
+            String, 'wheel_status', self.wheel_status_callback, 5)
 
         # Mirobot 스펙에 따른 offset 구성 및 동작 제한 범위
         self.cam_x_offset = 80.0
@@ -29,8 +29,6 @@ class MirobotTracker(Node):
         self.pose_history = deque(maxlen=5)  # 5개의 평균 벡터 추출 위함
         self.is_first_move = True           
         self.is_chassis_parked = False      # 매카넘 휠 정차 확인 플래그
-
-        self.get_logger().info("Mirobot Tracker 노드가 가동되었습니다.")
 
     def wheel_status_callback(self, msg):
         if msg.data == "STOPPED" and not self.is_chassis_parked:
