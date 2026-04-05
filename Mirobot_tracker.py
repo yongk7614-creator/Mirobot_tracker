@@ -62,19 +62,31 @@ class MirobotTracker(Node):
         avg_y = sum(p[1] for p in self.pose_history) / 5
         avg_z = sum(p[2] for p in self.pose_history) / 5
 
+        
         # 좌표계 변환 (카메라 15도 pitch 고려)
         pitch_rad = math.radians(self.cam_pitch_deg)
         base_x = self.cam_x_offset + (avg_z * math.cos(pitch_rad)) - (avg_y * math.sin(pitch_rad))
         base_y = -avg_x
         base_z = (avg_z * math.sin(pitch_rad)) - (avg_y * math.cos(pitch_rad))
 
+        horizontal_reach = math.sqrt(base_x**2 + base_y**2)
+        LIMIT_MAX_REACH = 350.0  # 최대 뻗을 수 있는 거리 (mm)
+        LIMIT_MIN_REACH = 120.0  # 최소 안전 거리 (mm) - 베이스 충돌 방지
+        
         # 안전 범위 검사 및 명령 전송
-        if self.min_z <= base_z <= self.max_z:
+       is_safe = True
+        if not (self.min_z <= base_z <= self.max_z):
+             is_safe = False
+        elif horizontal_reach > LIMIT_MAX_REACH:
+            is_safe = False
+        elif horizontal_reach < LIMIT_MIN_REACH:
+            is_safe = False
+            
+        if is_safe:
             target_speed = 600
-            self.get_logger().info(f"명령 하달 -> x:{base_x:.1f}, y:{base_y:.1f}, z:{base_z:.1f}")
+            self.get_logger().info(f"🤖 [ARM SEND] x:{base_x:.1f}, y:{base_y:.1f}, z:{base_z:.1f}")
             # self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=target_speed)
-        else:
-            self.get_logger().warn(f"Z축 안전 범위를 벗어났습니다 (Z: {base_z:.1f})")
+            
 
 def main(args=None):
     rclpy.init(args=args)
