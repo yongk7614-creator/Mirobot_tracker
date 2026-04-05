@@ -11,6 +11,7 @@ class MirobotTracker(Node):
     def __init__(self):
         super().__init__('mirobot_tracker')
 
+        # 아루코 마커 인식 노드 구독
         self.subscription = self.create_subscription(
             PoseArray, 'aruco_poses', self.listener_callback, 10)
         self.status_sub = self.create_subscription(
