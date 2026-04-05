@@ -88,7 +88,7 @@ class MirobotTracker(Node):
             
         if is_safe:
             target_speed = 600
-            self.get_logger().info(f"🤖 [ARM SEND] x:{base_x:.1f}, y:{base_y:.1f}, z:{base_z:.1f}")
+            self.get_logger().info(f"x:{base_x:.1f}, y:{base_y:.1f}, z:{base_z:.1f}")
             # self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=target_speed)
             
 
