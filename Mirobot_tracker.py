@@ -12,7 +12,6 @@ class MirobotTracker(Node):
     def __init__(self):
         super().__init__('mirobot_tracker')
 
-        # [1] ROS 2 통신 설정 (구독자)
         # 카메라 30Hz 비전 데이터 수신
         self.subscription = self.create_subscription(
             PoseArray, 'aruco_poses', self.listener_callback, 5)
@@ -23,47 +22,41 @@ class MirobotTracker(Node):
         self.wheel_status_sub = self.create_subscription(
             String, 'wheel_status', self.wheel_status_callback, 5)
 
-        # [2] 하드웨어 및 설치 환경 파라미터 (mm, deg)
+        # 하드웨어 및 설치 환경 파라미터
         self.cam_x_offset = 80.0     # 로봇 베이스 중심과 카메라 간의 거리 보정
-        self.cam_pitch_deg = 15.0    # 카메라 하향 기울기
+        self.cam_pitch_deg = 15.0    # 카메라 상향 기울기
         self.max_z = 415.0           # 팔 상승 최대 한계
-        self.min_z = 40.0            # 바닥 충돌 방지 하한계
+        self.min_z = 40.0            # 바닥 충돌 방지 
 
-        # [3] 제어 상태 변수
+        # 제어 상태 변수
         self.pose_history = deque(maxlen=5)  # 노이즈 필터링용 5프레임 이동 평균 버퍼
         self.is_chassis_parked = False       # 하체 정차 여부 플래그
         self.one_shot_timer = None           # 0.2초 물리적 안정화 대기용 타이머
         
         self.waiting_for_frames = False      # 버퍼 초기화 후 새 5프레임 수집 대기 상태
-        self.last_target = None              # 직전 타겟 좌표 (도킹 완료 오차 계산용)
+        self.last_target = None              # 직전 타겟 좌표 (도킹 완료시 오차 계산용)
 
     def wheel_status_callback(self, msg):
-        """매카넘 휠이 목적지에 정차했을 때 최초 1회 실행"""
-        if msg.data == "STOPPED" and not self.is_chassis_parked:
+         if msg.data == "STOPPED" and not self.is_chassis_parked:
             self.is_chassis_parked = True
             self.start_settling_timer()
 
     def arm_status_callback(self, msg):
-        """로봇 팔이 한 스텝 동작을 끝냈을 때 실행 (피드백 제어 루프)"""
         if msg.data == "DONE":
             self.start_settling_timer()
 
     def start_settling_timer(self):
-        """기구적 잔진동을 가라앉히기 위해 0.2초 논블로킹 대기 시작"""
         if self.one_shot_timer is not None:
             self.one_shot_timer.cancel()
         
         self.one_shot_timer = self.create_timer(0.2, self.on_settling_timer_expired)
 
     def on_settling_timer_expired(self):
-        """0.2초 안정화가 끝나면 흔들리던 버퍼를 비우고 정밀 수집 모드로 전환"""
         self.one_shot_timer.cancel()
-        
         self.pose_history.clear() 
         self.waiting_for_frames = True
 
     def listener_callback(self, msg):
-        """30Hz로 들어오는 비전 데이터를 수신하여 버퍼에 저장"""
         if not msg.poses:
             return 
         
@@ -79,7 +72,6 @@ class MirobotTracker(Node):
             self.calculate_and_send_target()
 
     def is_safe(self, x, y, z):
-        """로봇 팔의 작업 반경(Workspace) 및 충돌 구역 침범 여부 검사"""
         horizontal_reach = math.sqrt(x**2 + y**2)
         LIMIT_MAX_REACH = 350.0  # 최대 도달 가능 거리
         LIMIT_MIN_REACH = 120.0  # 자기 몸체 충돌 방지 최소 거리
@@ -94,9 +86,49 @@ class MirobotTracker(Node):
         return True
 
     def calculate_and_send_target(self):
-        """데이터 필터링, 좌표계 변환, 오차 검사 후 최종 제어 명령 하달"""
         if len(self.pose_history) < 5: 
             return
 
-        # 1. 5프레임 이동 평균 산출
+        # 5프레임 이동 평균 산출
         avg_x = sum(p[0] for p in self.pose_history) / 5
+        avg_y = sum(p[1] for p in self.pose_history) / 5
+        avg_z = sum(p[2] for p in self.pose_history) / 5
+
+        # 카메라 -> 로봇 베이스 기준 좌표계 변환
+        pitch_rad = math.radians(self.cam_pitch_deg)
+        base_x = self.cam_x_offset + (avg_z * math.cos(pitch_rad)) - (avg_y * math.sin(pitch_rad))
+        base_y = -avg_x
+        base_z = (avg_z * math.sin(pitch_rad)) - (avg_y * math.cos(pitch_rad))
+
+        # 제어 종료 조건: 이전 목표와의 3차원 유클리디안 거리 오차가 2mm 이하인지 확인
+        if self.last_target is not None:
+            dx = base_x - self.last_target[0]
+            dy = base_y - self.last_target[1]
+            dz = base_z - self.last_target[2]
+            error_dist = math.sqrt(dx**2 + dy**2 + dz**2)
+            
+            # 오차가 허용 범위 내라면 G-code 전송 중단하고 도킹 프로세스로 전환
+            if error_dist <= 2.0:
+                return 
+
+        # 물리적 도달 한계 안전성 검사 통과 시 명령 전송
+        if self.is_safe(base_x, base_y, base_z):
+            target_speed = 600
+            self.last_target = (base_x, base_y, base_z) # 다음 스텝 오차 비교를 위해 현재 타겟 저장
+            
+            # 실물 로봇 연결 시 주석 해제하여 G-code 전송
+            # self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=target_speed)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MirobotTracker()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
