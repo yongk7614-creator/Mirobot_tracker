@@ -1,16 +1,9 @@
-# ROS 2 파이썬 클라이언트 라이브러리
 import rclpy
-# ROS 2 노드를 생성하기 위한 기본 클래스
 from rclpy.node import Node
-# 3차원 공간상의 여러 위치(Pose) 데이터를 담는 메시지 타입 (카메라의 마커 인식 결과 수신용)
 from geometry_msgs.msg import PoseArray
-# 단순한 문자열 데이터를 주고받기 위한 메시지 타입 (상태 통신용)
 from std_msgs.msg import String
-# 삼각함수(sin, cos) 및 제곱근(sqrt) 등 수학 연산을 위한 내장 모듈
 import math
-# 양방향 큐(Double-ended queue). 오래된 데이터를 자동으로 밀어내는 슬라이딩 윈도우 구현에 사용
 from collections import deque
-# 노이즈를 걸러내기 위해 평균(mean) 대신 중앙값(median)을 구하는 함수
 from statistics import median
 
 # 실물 미로봇 제어 시 주석 해제 (미로봇 전용 파이썬 API 라이브러리)
@@ -18,12 +11,10 @@ from statistics import median
 
 class MirobotTracker(Node):
     def __init__(self):
-        # 'mirobot_tracker'라는 이름으로 ROS 2 네트워크에 노드 등록
         super().__init__('mirobot_tracker')
 
-        # =====================================================================
-        # 1. ROS 2 파라미터 선언 (실행 중 터미널이나 Launch 파일에서 값 변경 가능)
-        # =====================================================================
+     
+        # ROS 2 파라미터 선언 (실행 중 터미널이나 Launch 파일에서 값 변경 가능)
         # 로봇 팔이 움직일 속도 (mm/min)
         self.declare_parameter('target_speed', 600)
         # 5개의 프레임이 모였을 때, X축 데이터가 이 값(15mm) 이상 흔들리면 불안정한 것으로 간주
@@ -41,9 +32,7 @@ class MirobotTracker(Node):
         # 로봇 팔이 자기 몸통(베이스)과 부딪히지 않기 위한 최소 접근 금지 반경 (120mm)
         self.declare_parameter('min_reach', 120.0)      
 
-        # =====================================================================
-        # 2. 통신 설정 (퍼블리셔 및 서브스크라이버)
-        # =====================================================================
+        # 통신 설정 (퍼블리셔 및 서브스크라이버)
         # 현재 이 노드(추적기)의 상태(대기중, 정렬중, 완료 등)를 외부로 알리는 퍼블리셔 (큐 사이즈 5)
         self.state_pub = self.create_publisher(String, 'tracker_state', 5)
         
@@ -54,21 +43,17 @@ class MirobotTracker(Node):
         # 매카넘 휠(하체)이 멈췄을 때 "STOPPED", 움직일 때 "MOVING" 신호를 받는 서브스크라이버
         self.wheel_status_sub = self.create_subscription(String, 'wheel_status', self.wheel_status_callback, 5)
 
-        # =====================================================================
-        # 3. 물리적 설치 환경 파라미터 (단위: mm, deg)
-        # =====================================================================
+        # 물리적 설치 환경 파라미터 (단위: mm, deg)
         # 카메라가 로봇 팔의 중심축(베이스)으로부터 X축 방향으로 80mm 앞에 설치되어 있음
         self.cam_x_offset = 80.0
-        # 카메라가 수평을 보지 않고, 바닥 쪽으로 15도 숙여져서 설치되어 있음
+        # 카메라가 수평을 보지 않고, 상향으로 15도 들려서 설치되어 있음
         self.cam_pitch_deg = 15.0
         # 로봇 팔이 위로 올라갈 수 있는 최대 높이 제한 (415mm)
         self.max_z = 415.0
         # 로봇 팔이 바닥에 닿거나 충돌하지 않도록 하는 최소 높이 제한 (40mm)
         self.min_z = 40.0
 
-        # =====================================================================
-        # 4. 제어 상태 관리 변수
-        # =====================================================================
+        # 제어 상태 관리 변수
         # 최신 5개의 마커 좌표만 저장하는 슬라이딩 윈도우 큐 (6개째가 들어오면 1번째가 삭제됨)
         self.pose_history = deque(maxlen=5)
         # 현재 하체가 주차(정지) 상태인지 기억하는 플래그
@@ -85,9 +70,7 @@ class MirobotTracker(Node):
         # 오차 비교를 위해 직전에 로봇에게 명령을 내렸던 타겟 좌표(X,Y,Z)를 저장
         self.last_target = None
 
-        # =====================================================================
-        # 5. 예외 처리 (타임아웃 및 재시도 제한) 변수
-        # =====================================================================
+        # 예외 처리 (타임아웃 및 재시도 제한) 변수
         # 프레임 수집을 시작한 시간을 기록 (타임아웃 체크용)
         self.waiting_start_time = None
         # 마커가 안 보이거나 데이터가 불안정할 때 기다려주는 최대 시간 (1.0초)
@@ -104,7 +87,7 @@ class MirobotTracker(Node):
 
         # 노드가 시작되었음을 터미널에 알림
         self.get_logger().info("MirobotTracker: 강건 제어 및 상태 머신 노드 가동 완료.")
-        # 초기 상태를 "IDLE(대기)"로 퍼블리시
+        # 초기 상태를 'IDLE(대기)'로 퍼블리시
         self.publish_state("IDLE")
 
     def publish_state(self, state_str):
