@@ -84,9 +84,6 @@ class MirobotTracker(Node):
         self.iteration_count = 0
         # 최대 10번 움직여도 도킹 조건이 안 맞으면 그만두고 실패 처리
         self.max_iterations = 10
-
-        # 노드가 시작되었음을 터미널에 알림
-        self.get_logger().info("MirobotTracker: 강건 제어 및 상태 머신 노드 가동 완료.")
         # 초기 상태를 'IDLE(대기)'로 퍼블리시
         self.publish_state("IDLE")
 
