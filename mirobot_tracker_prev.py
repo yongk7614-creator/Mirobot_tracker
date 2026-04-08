@@ -349,7 +349,7 @@ class MirobotTracker(Node):
                 self.publish_state("COMPLETE_ON_TARGET")
                 return
 
-        # 4. 안전망 검사: 계산된 좌표가 로봇을 부수지 않는 안전한 위치라면
+        # 안전망 검사: 계산된 좌표가 로봇을 부수지 않는 안전한 위치라면
         if self.is_safe(base_x, base_y, base_z):
             # ROS 파라미터에서 현재 설정된 이동 속도를 가져옴
             target_speed = self.get_parameter('target_speed').value
@@ -357,7 +357,6 @@ class MirobotTracker(Node):
             # 제어(이동) 시도 횟수 1 증가
             self.iteration_count += 1
             self.publish_state("ALIGNING")
-            self.get_logger().info(f"🚀 [SEND] x={base_x:.1f}, y={base_y:.1f}, z={base_z:.1f} (Step: {self.iteration_count})")
             
             # 다음 번 동작 시 비교를 위해 이번에 내린 명령 좌표를 저장해둠
             self.last_target = (base_x, base_y, base_z)
@@ -369,7 +368,6 @@ class MirobotTracker(Node):
             self.publish_state("WAITING_FOR_FRAMES")
 
 def main(args=None):
-    """이 스크립트가 실행될 때 가장 먼저 호출되는 ROS 2 메인 함수"""
     rclpy.init(args=args)           # ROS 2 시스템 초기화
     node = MirobotTracker()         # 우리가 만든 MirobotTracker 노드 객체 생성
     try:
