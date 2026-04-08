@@ -14,7 +14,7 @@ class MirobotTracker(Node):
         super().__init__('mirobot_tracker')
 
      
-        # ROS 2 파라미터 선언 (실행 중 터미널이나 Launch 파일에서 값 변경 가능)
+        # ROS 2 파라미터 선언 
         # 로봇 팔이 움직일 속도 (mm/min)
         self.declare_parameter('target_speed', 600)
         # 5개의 프레임이 모였을 때, X축 데이터가 이 값(15mm) 이상 흔들리면 불안정한 것으로 간주
@@ -38,9 +38,9 @@ class MirobotTracker(Node):
         
         # 카메라 노드로부터 아루코 마커의 3D 좌표 배열을 초당 30번(30Hz)씩 받아오는 서브스크라이버
         self.subscription = self.create_subscription(PoseArray, 'aruco_poses', self.listener_callback, 5)
-        # 로봇 팔이 이동을 끝냈을 때 "DONE" 신호를 받는 서브스크라이버
+        # 로봇 팔이 이동을 끝냈을 때 'DONE' 신호를 받는 서브스크라이버
         self.status_sub = self.create_subscription(String, 'arm_status', self.arm_status_callback, 5)
-        # 매카넘 휠(하체)이 멈췄을 때 "STOPPED", 움직일 때 "MOVING" 신호를 받는 서브스크라이버
+        # 매카넘 휠(하체)이 멈췄을 때 'STOPPED', 움직일 때 'MOVING' 신호를 받는 서브스크라이버
         self.wheel_status_sub = self.create_subscription(String, 'wheel_status', self.wheel_status_callback, 5)
 
         # 물리적 설치 환경 파라미터 (단위: mm, deg)
@@ -54,9 +54,9 @@ class MirobotTracker(Node):
         self.min_z = 40.0
 
         # 제어 상태 관리 변수
-        # 최신 5개의 마커 좌표만 저장하는 슬라이딩 윈도우 큐 (6개째가 들어오면 1번째가 삭제됨)
+        # 최신 5개의 마커 좌표만 저장하는 슬라이딩 윈도우 큐
         self.pose_history = deque(maxlen=5)
-        # 현재 하체가 주차(정지) 상태인지 기억하는 플래그
+        # 현재 하체가 주차 상태인지 기억하는 플래그
         self.is_chassis_parked = False
         # 0.2초 안정화 대기를 수행할 ROS 타이머 객체를 담을 변수
         self.one_shot_timer = None
@@ -90,22 +90,22 @@ class MirobotTracker(Node):
         # 초기 상태를 'IDLE(대기)'로 퍼블리시
         self.publish_state("IDLE")
 
-    def publish_state(self, state_str):
-        """현재 노드의 상태 문자열을 토픽으로 발행하고, 터미널에도 출력하는 통합 함수"""
+    
+    def publish_state(self, state_str): 
+        # 현재 노드의 상태 문자열을 토픽으로 발행하고, 터미널에도 출력하는 통합 함수
         msg = String()
         msg.data = state_str
         self.state_pub.publish(msg) # 'tracker_state' 토픽으로 문자열 전송
-        self.get_logger().info(f"📢 [STATE] {state_str}")
-
+        
     def _reset_state(self):
-        """진행 중이던 대기 상태, 큐, 타이머를 모두 백지화(리셋)하는 함수. 하체가 다시 움직일 때 사용"""
+        # 진행 중이던 대기 상태, 큐, 타이머를 모두 백지화(리셋)하는 함수. 하체가 다시 움직일 때 사용
         self.waiting_for_frames = False
         self.waiting_start_time = None
         self.pose_history.clear()      # 큐 안에 있던 데이터 전부 삭제
         self._destroy_one_shot_timer() # 돌고 있던 타이머 강제 종료
 
     def wheel_status_callback(self, msg):
-        """하체(매카넘 휠) 노드에서 보내는 상태 메시지를 처리하는 콜백 함수"""
+        # 하체(매카넘 휠) 노드에서 보내는 상태 메시지를 처리하는 콜백 함수
         # 이미 도킹이 끝났거나 실패했다면 하체의 움직임은 무시함
         if self.is_complete or self.is_failed:
             return
@@ -115,7 +115,6 @@ class MirobotTracker(Node):
             # 이미 정차 처리되어 있다면 중복 실행 방지
             if self.is_chassis_parked:
                 return
-            self.get_logger().info("🛞 [Wheel] STOPPED. 잔진동 안정화 대기 시작.")
             self.is_chassis_parked = True
             # 상태를 프레임 대기 중으로 변경
             self.publish_state("WAITING_FOR_FRAMES")
@@ -124,14 +123,13 @@ class MirobotTracker(Node):
 
         # 하체가 다시 움직이기 시작했다는 신호
         elif msg.data == "MOVING":
-            self.get_logger().info("🛞 [Wheel] MOVING. 기존 제어 상태를 강제 초기화합니다.")
             self.is_chassis_parked = False
             # 움직이는 동안 찍힌 데이터는 다 쓰레기이므로 리셋 함수 호출
             self._reset_state()
             self.publish_state("MOVING")
 
     def arm_status_callback(self, msg):
-        """로봇 팔(Mirobot) 제어기에서 명령 수행을 완료했다고 보내는 메시지 처리"""
+        # 로봇 팔(Mirobot) 제어기에서 명령 수행을 완료했다고 보내는 메시지 처리
         if self.is_complete or self.is_failed:
             return
 
@@ -139,25 +137,23 @@ class MirobotTracker(Node):
         if msg.data == "DONE":
             # 무한히 꼼지락거리는 것을 막기 위해, 최대 제어 횟수(10번)를 넘었는지 검사
             if self.iteration_count >= self.max_iterations:
-                self.get_logger().warn(f"🏁 최대 제어 횟수({self.max_iterations}회) 도달. 강제 종료.")
                 self.is_failed = True # 실패 플래그 ON
                 self.publish_state("FAILED_MAX_ITER")
                 return
 
-            self.get_logger().info("✅ [Arm] DONE. 동작 후 잔진동 안정화 대기 시작.")
             self.publish_state("WAITING_FOR_FRAMES")
             # 팔이 멈출 때 발생한 진동을 가라앉히기 위해 0.2초 타이머 시작
             self.start_settling_timer()
 
     def start_settling_timer(self):
-        """0.2초짜리 일회성(One-shot) ROS 타이머를 생성하는 함수"""
+        # 0.2초짜리 일회성 ROS 타이머를 생성하는 함수
         # 혹시 이전에 돌고 있던 타이머가 있다면 안전하게 파괴
         self._destroy_one_shot_timer()
         # 0.2초(200ms) 뒤에 self.on_settling_timer_expired 함수를 딱 한 번 실행하도록 설정
         self.one_shot_timer = self.create_timer(0.2, self.on_settling_timer_expired)
 
     def on_settling_timer_expired(self):
-        """0.2초 타이머가 끝나면(진동이 다 가라앉으면) ROS가 자동으로 호출하는 함수"""
+        # 0.2초 타이머가 끝나면(진동이 다 가라앉으면) ROS가 자동으로 호출하는 함수
         # 타이머 메모리 해제
         self._destroy_one_shot_timer()
         # 진동이 가라앉는 0.2초 동안 큐에 들어와 있던 흔들리는 데이터를 전부 삭제
@@ -171,19 +167,19 @@ class MirobotTracker(Node):
         self.frame_retry_count = 0  
 
     def _destroy_one_shot_timer(self):
-        """ROS 타이머 객체를 안전하게 종료하고 메모리에서 지우는 유틸리티 함수"""
+        # ROS 타이머 객체를 안전하게 종료하고 메모리에서 지우는 유틸리티 함수
         if self.one_shot_timer is not None:
             self.one_shot_timer.cancel()
             self.destroy_timer(self.one_shot_timer)
             self.one_shot_timer = None
 
     def is_pose_valid(self, x, y, z):
-        """카메라에서 들어온 좌표가 물리적으로 말이 되는 값인지 1차 필터링하는 함수 (아웃라이어 제거)"""
-        # 1) 절대 범위 검사: 상식적으로 카메라가 볼 수 있는 1미터~2미터 밖의 데이터면 버림
+        # 카메라에서 들어온 좌표가 물리적으로 말이 되는 값인지 1차 필터링하는 함수
+        # 절대 범위 검사: 상식적으로 카메라가 볼 수 있는 1미터~2미터 밖의 데이터면 버림
         if not (-1000.0 <= x <= 1000.0) or not (-1000.0 <= y <= 1000.0) or not (50.0 <= z <= 2000.0):
             return False
 
-        # 2) Jump 검사: 직전 프레임 대비 값이 순간이동(순간적으로 튀었는지)했는지 검사
+        # Jump 검사: 직전 프레임 대비 값이 순간이동(순간적으로 튀었는지)했는지 검사
         if len(self.pose_history) > 0:
             # 큐의 맨 마지막(가장 최근) 데이터 꺼내기
             prev_x, prev_y, prev_z = self.pose_history[-1]
@@ -204,7 +200,7 @@ class MirobotTracker(Node):
         return True
 
     def is_pose_stable(self):
-        """큐에 모인 5개의 데이터가 얼마나 흔들리고 있는지 안정성을 평가하는 함수"""
+        # 큐에 모인 5개의 데이터가 얼마나 흔들리고 있는지 안정성을 평가하는 함수
         # 5개가 다 안 모였으면 검사 불가
         if len(self.pose_history) < 5:
             return False
@@ -231,7 +227,7 @@ class MirobotTracker(Node):
         return True
 
     def listener_callback(self, msg):
-        """카메라 노드에서 30Hz 속도로 쏴주는 아루코 마커 좌표 메시지를 처리하는 메인 콜백 함수"""
+        # 카메라 노드에서 30Hz 속도로 쏴주는 아루코 마커 좌표 메시지를 처리하는 메인 콜백 함수
         # 도킹이 이미 종료되었으면 더 이상 카메라 데이터를 처리하지 않고 무시함
         if self.is_complete or self.is_failed:
             return
@@ -262,12 +258,12 @@ class MirobotTracker(Node):
         if self.waiting_for_frames and len(self.pose_history) == 5:
             # 5개가 모였어도 진동이 심한지(stable) 2차 검사. 만약 불안정하면
             if not self.is_pose_stable():
-                # 큐를 비우지 않음! 다음 0.033초 뒤에 들어올 새 데이터가 과거 데이터를 밀어내도록 냅둠 (슬라이딩 윈도우 유지)
+                # 큐를 비우지 않음, 다음 0.033초 뒤에 들어올 새 데이터가 과거 데이터를 밀어내도록 냅둠 (슬라이딩 윈도우 유지)
                 # 대신, 무한히 안 모이는 것을 막기 위해 타임아웃 계산용 시작 시간만 갱신해줌
                 self.waiting_start_time = self.get_clock().now() 
                 return
 
-            # 안정성 검사까지 완벽히 통과! 드디어 타겟 계산을 시작함
+            # 안정성 검사까지 통과 후 타겟 계산을 시작함
             self.waiting_for_frames = False
             self.waiting_start_time = None
             self.calculate_and_send_target()
@@ -276,7 +272,7 @@ class MirobotTracker(Node):
             self._check_frame_wait_timeout()
 
     def _check_frame_wait_timeout(self):
-        """마커가 가려지거나 노이즈로 인해 프레임 수집이 멈춰버리는 무한 대기(Deadlock)를 방지하는 함수"""
+        # 마커가 가려지거나 노이즈로 인해 프레임 수집이 멈춰버리는 무한 대기(Deadlock)를 방지하는 함수
         # 프레임 수집 모드가 아니거나, 시간이 기록되지 않았으면 검사 생략
         if not self.waiting_for_frames or self.waiting_start_time is None:
             return
@@ -290,7 +286,6 @@ class MirobotTracker(Node):
             
             # 재시도 횟수가 한계(5회, 총 5초)를 넘으면
             if self.frame_retry_count >= self.max_frame_retry:
-                self.get_logger().error("🚨 마커 인식 연속 실패! Fail-safe 전환. 제어 중단.")
                 # 제어를 완전히 포기하고 상태를 실패로 변경
                 self._reset_state()
                 self.is_failed = True
@@ -298,12 +293,11 @@ class MirobotTracker(Node):
                 return
 
             # 아직 재시도 기회가 남았다면, 큐에 이상한 값이 껴서 막힌 것일 수 있으니 큐를 싹 비우고 리트라이
-            self.get_logger().warn(f"프레임 수집 타임아웃! 버퍼 재초기화 (재시도: {self.frame_retry_count}/{self.max_frame_retry})")
             self.pose_history.clear()
             self.waiting_start_time = self.get_clock().now() # 시간 다시 0초부터 측정
 
     def is_safe(self, x, y, z):
-        """계산된 목표 좌표가 로봇 팔이 뻗을 수 있는 한계를 넘거나, 자기 몸체를 찌르지 않는지 검사하는 안전망"""
+        # 계산된 목표 좌표가 로봇 팔이 뻗을 수 있는 한계를 넘거나, 자기 몸체를 찌르지 않는지 검사하는 안전망
         # 로봇 베이스 중심(원점)에서 목표 지점까지의 2D 평면상 직선거리(도달 반경) 계산 (피타고라스 정리)
         horizontal_reach = math.sqrt(x**2 + y**2)
         
@@ -313,54 +307,49 @@ class MirobotTracker(Node):
 
         # 목표 Z(높이)가 범위를 벗어났거나, 너무 멀거나, 몸통에 너무 가까우면 동작 거부
         if not (self.min_z <= z <= self.max_z) or horizontal_reach > MAX_REACH or horizontal_reach < MIN_REACH:
-            self.get_logger().warn(f"안전 반경 이탈 (Reach: {horizontal_reach:.1f}, Z: {z:.1f})", throttle_duration_sec=1.0)
             return False
             
         return True
 
     def calculate_and_send_target(self):
-        """최종적으로 로봇이 이동할 좌표를 계산하고, 완료 여부를 판별한 뒤 G-code를 전송하는 메인 함수"""
+        # 최종적으로 로봇이 이동할 좌표를 계산하고, 완료 여부를 판별한 뒤 G-code를 전송하는 메인 함수
         if len(self.pose_history) < 5:
             return
 
-        # 1. 필터링: 5개 데이터 중 튀는 값을 배제하기 위해 리스트를 정렬한 후 한가운데 있는 '중앙값(Median)'을 추출
+        # 5개 데이터 중 튀는 값을 배제하기 위해 리스트를 정렬한 후 한가운데 있는 Median을 추출
         filt_x = median([p[0] for p in self.pose_history])
         filt_y = median([p[1] for p in self.pose_history])
         filt_z = median([p[2] for p in self.pose_history])
 
-        # 2. 좌표 변환: 카메라가 기울어진 15도(Pitch) 각도를 삼각함수를 이용해 풀어서, 로봇 베이스 기준의 올바른 X, Y, Z로 변환
+        # 좌표 변환: 카메라가 기울어진 15도(Pitch) 각도를 삼각함수를 이용해 풀어서, 로봇 베이스 기준의 올바른 X, Y, Z로 변환
         pitch_rad = math.radians(self.cam_pitch_deg)
         base_x = self.cam_x_offset + (filt_z * math.cos(pitch_rad)) - (filt_y * math.sin(pitch_rad))
         base_y = -filt_x
         base_z = (filt_z * math.sin(pitch_rad)) - (filt_y * math.cos(pitch_rad))
 
-        # 3. 종료 판별 로직: 직전 스텝에서 명령을 내렸던 타겟이 존재한다면 비교 시작
+        # 종료 판별 로직: 직전 스텝에서 명령을 내렸던 타겟이 존재한다면 비교 시작
         if self.last_target is not None:
-            # 3-1. 명령값 변화량 계산 (수렴 정체 감지용)
+            # 명령값 변화량 계산 (수렴 정체 감지용)
             cmd_dx = base_x - self.last_target[0]
             cmd_dy = base_y - self.last_target[1]
             cmd_dz = base_z - self.last_target[2]
             # 직전에 로봇에게 가라고 한 위치와, 지금 가라고 할 위치의 3차원 거리 차이
             command_delta = math.sqrt(cmd_dx**2 + cmd_dy**2 + cmd_dz**2)
 
-            # 3-2. 3D 잔차(목표 오차) 산출
+            # 3D 잔차(목표 오차) 산출
             # Y축(좌우)이 0에 맞고, Z축(높이)이 목표한 최하단(min_z)에 도달했는지를 거리로 계산
             residual_3d = math.sqrt(base_y**2 + (base_z - self.min_z)**2) 
             
-            self.get_logger().info(f"📊 [검증] 명령 변화량: {command_delta:.2f}mm | 3D 잔차: {residual_3d:.2f}mm")
-
-            # 종료 조건 1 (기계적 한계): 명령 변화량이 1.0mm 이하라는 건 로봇이 목표에 도달했거나 한계치에서 제자리걸음 중이라는 뜻
+            # 종료 조건 1: 명령 변화량이 1.0mm 이하라는 건 로봇이 목표에 도달했거나 한계치에서 제자리걸음 중이라는 뜻
             if command_delta <= 1.0:
                 self.is_complete = True
                 self.publish_state("COMPLETE_CONVERGED")
-                self.get_logger().info("🎉 [도킹 완료] 기계적 수렴 한계 도달 (Stagnation). 성공 처리!")
                 return
             
-            # 종료 조건 2 (완벽한 도킹): 목표로 한 Y, Z 위치와의 3차원 오차가 3.0mm 이내로 들어왔다면 완벽한 성공
+            # 종료 조건 2: 목표로 한 Y, Z 위치와의 3차원 오차가 3.0mm 이내로 들어왔다면 완벽한 성공
             if residual_3d <= 3.0: 
                 self.is_complete = True
                 self.publish_state("COMPLETE_ON_TARGET")
-                self.get_logger().info("🎉 [도킹 완료] 목표 잔차 3D 기준 도달. 완벽하게 성공!")
                 return
 
         # 4. 안전망 검사: 계산된 좌표가 로봇을 부수지 않는 안전한 위치라면
@@ -376,7 +365,7 @@ class MirobotTracker(Node):
             # 다음 번 동작 시 비교를 위해 이번에 내린 명령 좌표를 저장해둠
             self.last_target = (base_x, base_y, base_z)
 
-            # 🌟 실물 로봇에 연결 시 아래 주석을 풀면 Python 파라미터가 텍스트 형태의 G-code로 변환되어 시리얼로 전송됨
+            # 실물 로봇에 연결 시 아래 주석을 풀면 Python 파라미터가 텍스트 형태의 G-code로 변환되어 시리얼로 전송됨
             # self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=target_speed)
         else:
             # 안전 구역 밖이라 명령을 포기했다면, 다시 프레임 수집 대기 상태로 전환
