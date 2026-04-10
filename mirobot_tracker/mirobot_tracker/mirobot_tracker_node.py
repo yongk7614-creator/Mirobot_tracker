@@ -11,7 +11,6 @@ class MirobotTracker(Node):
     def __init__(self):
         super().__init__('mirobot_tracker')
 
-        # 노드 구독 설정
         # 30fps로 들어오는 아루코 마커 좌표 배열 수신
         self.subscription = self.create_subscription(
             PoseArray, 'aruco_poses', self.listener_callback, 5)
