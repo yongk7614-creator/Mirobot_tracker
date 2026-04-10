@@ -13,7 +13,6 @@ class MirobotTracker(Node):
     def __init__(self):
         super().__init__('mirobot_tracker')
 
-        # ROS 2 Parameters
         self.declare_parameter('target_speed', 600)
         self.declare_parameter('max_range_x', 15.0)     
         self.declare_parameter('max_range_y', 15.0)     
@@ -23,19 +22,16 @@ class MirobotTracker(Node):
         self.declare_parameter('max_reach', 350.0)      
         self.declare_parameter('min_reach', 120.0)      
 
-        # Pub / Sub Setup
         self.state_pub = self.create_publisher(String, 'tracker_state', 5)
         self.subscription = self.create_subscription(PoseArray, 'aruco_poses', self.listener_callback, 5)
         self.status_sub = self.create_subscription(String, 'arm_status', self.arm_status_callback, 5)
         self.wheel_status_sub = self.create_subscription(String, 'wheel_status', self.wheel_status_callback, 5)
 
-        # Hardware Calibration (mm, deg)
         self.cam_x_offset = 80.0
         self.cam_pitch_deg = 15.0
         self.max_z = 415.0
         self.min_z = 40.0
 
-        # State Variables
         self.pose_history = deque(maxlen=5)
         self.is_chassis_parked = False
         self.one_shot_timer = None
@@ -44,7 +40,6 @@ class MirobotTracker(Node):
         self.is_failed = False
         self.last_target = None
 
-        # Timeout & Retry Policy
         self.waiting_start_time = None
         self.frame_wait_timeout_sec = 1.0
         self.frame_retry_count = 0
@@ -112,11 +107,9 @@ class MirobotTracker(Node):
             self.one_shot_timer = None
 
     def is_pose_valid(self, x, y, z):
-        # Range Check
         if not (-1000.0 <= x <= 1000.0) or not (-1000.0 <= y <= 1000.0) or not (50.0 <= z <= 2000.0):
             return False
 
-        # Jump Filter
         if len(self.pose_history) > 0:
             prev_x, prev_y, prev_z = self.pose_history[-1]
             dx, dy, dz = abs(x - prev_x), abs(y - prev_y), abs(z - prev_z)
@@ -209,13 +202,11 @@ class MirobotTracker(Node):
         filt_y = median([p[1] for p in self.pose_history])
         filt_z = median([p[2] for p in self.pose_history])
 
-        # Coordinate Transformation (Camera Pitch Compensation)
         pitch_rad = math.radians(self.cam_pitch_deg)
         base_x = self.cam_x_offset + (filt_z * math.cos(pitch_rad)) - (filt_y * math.sin(pitch_rad))
         base_y = -filt_x
         base_z = (filt_z * math.sin(pitch_rad)) - (filt_y * math.cos(pitch_rad))
 
-        # Termination Check
         if self.last_target is not None:
             cmd_dx = base_x - self.last_target[0]
             cmd_dy = base_y - self.last_target[1]
@@ -237,7 +228,8 @@ class MirobotTracker(Node):
             self.iteration_count += 1
             self.publish_state("ALIGNING")
             self.last_target = (base_x, base_y, base_z)
-            # self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=self.get_parameter('target_speed').value)
+        
+        self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=self.get_parameter('target_speed').value)
         else:
             self.publish_state("WAITING_FOR_FRAMES")
 
