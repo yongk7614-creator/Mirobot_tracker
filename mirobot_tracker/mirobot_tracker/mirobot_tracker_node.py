@@ -11,13 +11,16 @@ class MirobotTracker(Node):
     def __init__(self):
         super().__init__('mirobot_tracker')
 
+        self.arm = Mirobot(portname='/dev/ttyUSB0') 
+        self.arm.home() 
+        
         # 30fps로 들어오는 아루코 마커 좌표 배열 수신
         self.subscription = self.create_subscription(
             PoseArray, 'aruco_poses', self.listener_callback, 5)
         # 로봇 팔이 동작을 마쳤을 때 보내는 신호(DONE) 대기
         self.status_sub = self.create_subscription(
             String, 'arm_status', self.arm_status_callback, 5)
-        # 매카넘 휠이 정차했다는 신호(STOPPED) 수신
+        # 매카넘 휠이 정차했다는 신호 수신
         self.wheel_status_sub = self.create_subscription(
             String, 'wheel_status', self.wheel_status_callback, 5)
 
