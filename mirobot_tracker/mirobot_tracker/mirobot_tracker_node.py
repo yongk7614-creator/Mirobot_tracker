@@ -5,20 +5,20 @@ from std_msgs.msg import String
 import math
 from collections import deque
 
-# from .wlkatapython import Mirobot
+from .wlkatapython import Mirobot
 
 class MirobotTracker(Node):
     def __init__(self):
         super().__init__('mirobot_tracker')
 
         # 노드 구독 설정
-        # aruco_poses: 30fps로 들어오는 아루코 마커 좌표 배열 수신
+        # 30fps로 들어오는 아루코 마커 좌표 배열 수신
         self.subscription = self.create_subscription(
             PoseArray, 'aruco_poses', self.listener_callback, 5)
-        # arm_status: 로봇 팔이 동작을 마쳤을 때 보내는 신호(DONE) 대기
+        # 로봇 팔이 동작을 마쳤을 때 보내는 신호(DONE) 대기
         self.status_sub = self.create_subscription(
             String, 'arm_status', self.arm_status_callback, 5)
-        # wheel_status: 매카넘 휠이 정차했다는 신호(STOPPED) 수신
+        # 매카넘 휠이 정차했다는 신호(STOPPED) 수신
         self.wheel_status_sub = self.create_subscription(
             String, 'wheel_status', self.wheel_status_callback, 5)
 
@@ -94,7 +94,7 @@ class MirobotTracker(Node):
         if is_safe:
             target_speed = 600
             self.get_logger().info(f"x:{base_x:.1f}, y:{base_y:.1f}, z:{base_z:.1f}")
-            # self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=target_speed)
+            self.arm.set_p(base_x, base_y, base_z, 0.0, 0.0, 0.0, speed=target_speed)
 
 def main(args=None):
     rclpy.init(args=args)
