@@ -1,8 +1,8 @@
 import copy
 
 import rclpy
+from geometry_msgs.msg import PoseArray, PoseStamped
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
 
@@ -11,7 +11,7 @@ class WheelStopToGoalNode(Node):
         super().__init__("wheel_stop_to_goal_node")
 
         defaults = {
-            "pose_topic": "/aruco_pose_base",
+            "pose_topic": "/aruco_poses",
             "wheel_status_topic": "/wheel_status",
             "goal_topic": "/mirobot_goal_pose",
             "sample_delay_sec": 0.2,
@@ -27,22 +27,18 @@ class WheelStopToGoalNode(Node):
             "goal_qw": 1.0,
         }
 
-        # parameter declare
         for name, value in defaults.items():
             self.declare_parameter(name, value)
             setattr(self, name, self.get_parameter(name).value)
 
-        # initialize
         self.latest_pose = None
         self.prev_is_stopped = False
         self.collecting = False
         self.sample_buffer = []
         self.delay_timer = None
 
-        
-        # make subscriber
         self.pose_sub = self.create_subscription(
-            PoseStamped, self.pose_topic, self.pose_callback, 10
+            PoseArray, self.pose_topic, self.pose_callback, 10
         )
         self.status_sub = self.create_subscription(
             String, self.wheel_status_topic, self.status_callback, 10
@@ -57,11 +53,18 @@ class WheelStopToGoalNode(Node):
             self.delay_timer = None
 
     def pose_callback(self, msg):
-        self.latest_pose = msg
+        if len(msg.poses) == 0:
+            return
+
+        pose_msg = PoseStamped()
+        pose_msg.header = copy.deepcopy(msg.header)
+        pose_msg.pose = copy.deepcopy(msg.poses[0])
+        self.latest_pose = pose_msg
+
         if not self.collecting:
             return
 
-        self.sample_buffer.append(copy.deepcopy(msg))
+        self.sample_buffer.append(copy.deepcopy(pose_msg))
         if len(self.sample_buffer) >= self.sample_count:
             self.publish_averaged_goal()
             self.collecting = False
@@ -79,7 +82,7 @@ class WheelStopToGoalNode(Node):
             return
 
         if self.latest_pose is None:
-            self.get_logger().warn("No pose received yet.")
+            self.get_logger().warn("No ArUco pose received yet.")
             return
 
         self.prev_is_stopped = True
@@ -94,7 +97,7 @@ class WheelStopToGoalNode(Node):
     def start_sampling_once(self):
         self.reset_sampling()
         self.collecting = True
-        self.get_logger().info("Started pose sampling.")
+        self.get_logger().info("Started ArUco pose sampling.")
 
     def publish_averaged_goal(self):
         if not self.sample_buffer:
@@ -120,7 +123,7 @@ class WheelStopToGoalNode(Node):
 
         self.goal_pub.publish(goal_pose)
         self.get_logger().info(
-            "Published averaged goal: x=%.4f y=%.4f z=%.4f"
+            "Averaged pose published: x=%.4f y=%.4f z=%.4f"
             % (
                 goal_pose.pose.position.x,
                 goal_pose.pose.position.y,
