@@ -61,6 +61,16 @@ class MoveItGoalNode(Node):
         )
 
     def goal_pose_callback(self, msg):
+        self.get_logger().info(
+            "Received MoveIt goal request: frame=%s x=%.4f y=%.4f z=%.4f"
+            % (
+                msg.header.frame_id,
+                msg.pose.position_x,
+                msg.pose.position_y,
+                msg.pose.position_z,
+            )
+        )
+        
         with self._lock:
             if self._busy:
                 self.get_logger().warn("MoveIt is busy. Ignoring new goal.")
@@ -112,7 +122,18 @@ class MoveItGoalNode(Node):
         ]
         quat_xyzw = [qx, qy, qz, qw]
 
+        self.get_logger().info(
+            "Goal validated. Ready to send to MoveIt: frame=%s x=%.4f y=%.4f z=%.4f"
+            % (
+                goal_pose.header.frame_id,
+                position[0],
+                position[1],
+                position[2],
+            )
+        )
+
         if self.cartesian:
+            self.get_logger().info("Sending cartesian goal to MoveIt.")
             self.moveit2.move_to_pose(
                 position=position,
                 quat_xyzw=quat_xyzw,
@@ -121,14 +142,19 @@ class MoveItGoalNode(Node):
                 cartesian_fraction_threshold=self.cartesian_fraction_threshold,
             )
         else:
+            self.get_logger().info("Sending joint-space goal to MoveIt.")
             self.moveit2.move_to_pose(
                 position=position,
                 quat_xyzw=quat_xyzw,
                 cartesian=False,
             )
-
+            
         if self.execute_motion:
             self.moveit2.wait_until_executed()
+            self.get_logger().info("MoveIt goal excution completed.")
+        else:
+            self.get_logger().info("MoveIt goal was submitted without excution wait.")
+            
 
     def _is_same_goal(self, a, b):
         if b is None:
