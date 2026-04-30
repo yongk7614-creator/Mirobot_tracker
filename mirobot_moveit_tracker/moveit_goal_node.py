@@ -65,9 +65,9 @@ class MoveItGoalNode(Node):
             "Received MoveIt goal request: frame=%s x=%.4f y=%.4f z=%.4f"
             % (
                 msg.header.frame_id,
-                msg.pose.position_x,
-                msg.pose.position_y,
-                msg.pose.position_z,
+                msg.pose.position.x,
+                msg.pose.position.y,
+                msg.pose.position.z,
             )
         )
         
