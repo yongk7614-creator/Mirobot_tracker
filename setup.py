@@ -11,10 +11,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (
             "share/" + package_name + "/launch",
-            [
-                "launch/mirobot_moveit_tracker.launch.py",
-                "launch/mirobot_wlkata_system.launch.py",
-            ],
+            ["launch/mirobot_moveit_tracker.launch.py"],
         ),
     ],
     install_requires=["setuptools"],
@@ -26,11 +23,10 @@ setup(
     extras_require={
         "test": ["pytest"],
     },
-   entry_points={
-    "console_scripts": [
-        "wheel_stop_to_goal_node = mirobot_moveit_tracker.wheel_stop_to_goal_node:main",
-        "moveit_goal_node = mirobot_moveit_tracker.moveit_goal_node:main",
-    ],
-},
-
+    entry_points={
+        "console_scripts": [
+            "wheel_stop_to_goal_node = mirobot_moveit_tracker.wheel_stop_to_goal_node:main",
+            "moveit_goal_node = mirobot_moveit_tracker.moveit_goal_node:main",
+        ],
+    },
 )
