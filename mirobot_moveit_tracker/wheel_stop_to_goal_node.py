@@ -5,6 +5,10 @@ from geometry_msgs.msg import PoseArray, PoseStamped
 from rclpy.node import Node
 from std_msgs.msg import String
 
+# tf2 관련 import 추가
+import tf2_ros
+import tf2_geometry_msgs  # PoseStamped 변환을 위해 필요
+
 
 class WheelStopToGoalNode(Node):
     def __init__(self):
@@ -19,6 +23,7 @@ class WheelStopToGoalNode(Node):
             "offset_x": 0.0,
             "offset_y": 0.0,
             "offset_z": 0.0,
+            # [수정] goal_frame은 실제 변환 목적지 frame으로 사용
             "goal_frame": "base_link",
             "use_marker_orientation": True,
             "goal_qx": 0.0,
@@ -36,6 +41,10 @@ class WheelStopToGoalNode(Node):
         self.collecting = False
         self.sample_buffer = []
         self.delay_timer = None
+
+        # [추가] tf2 버퍼 및 리스너 초기화
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.pose_sub = self.create_subscription(
             PoseArray, self.pose_topic, self.pose_callback, 10
@@ -104,17 +113,46 @@ class WheelStopToGoalNode(Node):
             self.get_logger().warn("No samples collected.")
             return
 
-        avg_x = sum(p.pose.position.x for p in self.sample_buffer) / len(self.sample_buffer)
-        avg_y = sum(p.pose.position.y for p in self.sample_buffer) / len(self.sample_buffer)
-        avg_z = sum(p.pose.position.z for p in self.sample_buffer) / len(self.sample_buffer)
+        # [수정] 각 샘플을 개별적으로 goal_frame으로 tf 변환한 뒤 평균을 계산
+        transformed_samples = []
+        for sample in self.sample_buffer:
+            try:
+                # sample.header.frame_id = 카메라 광학 프레임
+                # self.goal_frame = "base_link"
+                transformed = self.tf_buffer.transform(
+                    sample,
+                    self.goal_frame,
+                    timeout=rclpy.duration.Duration(seconds=0.5),
+                )
+                transformed_samples.append(transformed)
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ) as e:
+                self.get_logger().warn(
+                    "TF transform failed for sample: %s. Skipping." % str(e)
+                )
 
-        goal_pose = copy.deepcopy(self.sample_buffer[-1])
+        if not transformed_samples:
+            self.get_logger().error(
+                "All TF transforms failed. Cannot publish goal."
+            )
+            return
+
+        # 변환된 샘플들로 평균 계산
+        avg_x = sum(p.pose.position.x for p in transformed_samples) / len(transformed_samples)
+        avg_y = sum(p.pose.position.y for p in transformed_samples) / len(transformed_samples)
+        avg_z = sum(p.pose.position.z for p in transformed_samples) / len(transformed_samples)
+
+        goal_pose = copy.deepcopy(transformed_samples[-1])
         goal_pose.header.stamp = self.get_clock().now().to_msg()
-        goal_pose.header.frame_id = self.goal_frame
+        goal_pose.header.frame_id = self.goal_frame  # 이제 실제로 변환된 frame
         goal_pose.pose.position.x = avg_x + self.offset_x
         goal_pose.pose.position.y = avg_y + self.offset_y
         goal_pose.pose.position.z = avg_z + self.offset_z
 
+        # use_marker_orientation=True면 tf 변환된 orientation 사용 (이미 goal_frame 기준)
         if not self.use_marker_orientation:
             goal_pose.pose.orientation.x = self.goal_qx
             goal_pose.pose.orientation.y = self.goal_qy
@@ -123,8 +161,9 @@ class WheelStopToGoalNode(Node):
 
         self.goal_pub.publish(goal_pose)
         self.get_logger().info(
-            "Averaged pose published: x=%.4f y=%.4f z=%.4f"
+            "Averaged pose published (in %s): x=%.4f y=%.4f z=%.4f"
             % (
+                self.goal_frame,
                 goal_pose.pose.position.x,
                 goal_pose.pose.position.y,
                 goal_pose.pose.position.z,
